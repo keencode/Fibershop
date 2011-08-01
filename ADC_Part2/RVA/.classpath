@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.launching.macosx.MacOSXType/JVM 1.4"/>
+	<classpathentry kind="lib" path="core.jar"/>
+	<classpathentry kind="lib" path="libraries/dxf/library/dxf.jar"/>
+	<classpathentry kind="lib" path="libraries/pdf/library/itext.jar"/>
+	<classpathentry kind="lib" path="libraries/pdf/library/pdf.jar"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>

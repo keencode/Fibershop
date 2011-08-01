@@ -1,0 +1,73 @@
+RVA Composite Production Notes - 4/09/08
+(For Part 2, and Part 3)
+
+Mandrel Preparation
+----------------------
+
+   1/ After leveling, the mandrel needs to be rotated back 90
+degrees. The flat side of the mandrel is rotated away from the
+operator, and an edge faces the operator.
+   2/ Temperature: 600 C
+   3/ Pressure: Lowest, 100 lb
+   4/ Tension needs to be ON.
+
+   5/ Mandrel Reinforcement: 2-3 single strip wraps need to be added
+at even intervals in the center of the manrel (To prevent bowing).
+Eye-ball the even intervals.
+
+       Load: TRI_RVA_5Wrap
+       Details: This is a single ply at 0 degrees, single strip file
+that places a tight hoop at the home position.  It will be 5 Wraps
+around the mandrel.
+
+   6/ Offset the robot to -8 inches from the standard 0 position at
+the left end of the mandrel.  This is the farthest limit to the LEFT that the Robot will tape to.
+
+(You will see the scars on the mandrel where the part begins.)
+
+Part Production
+----------------------
+
+   1/ End-Caps:  Two hoops will be added for the strips to begin and
+end on either end of the mandrel.
+       Load: TRI_RVA_CAPS_4_5
+       Details: 2 strips at 0 degrees, the left one is first, and the
+right one is second.
+
+   2/  Production Part (Part 2):
+       Load: SILVER_RVA_80to3_O3_OFFSET_FIX
+       Details: 6 strips at a varing degrees. Strips alternate taping directions, from
+the left to the right, then from the right to the left.  
+Please clean the roller of the robot before each ply.
+
+   3/ Axial Corner Strips:
+       Load: SILVER_RVA_AXIAL_NEW
+       Details: These are 3 strips at 90 degrees, one on each of the edges of the
+mandrel moving from left to right. Strips will over run the part, and the extra material can be trimmed.
+
+
+Production Order (6 Plys)
+-------------------------
+ 1/ End-Caps
+ 2/ Production Part
+ 3/ Axial Corner Strips
+ 4/ Axial Corner Strips
+ 5/ Axial Corner Strips
+ 6/ End-Caps
+ 7/ Production Part
+ 8/ End-Caps
+ 9/ Production Part
+ 10/ End-Caps
+ 11/ Production Part
+ 12/ End-Caps
+ 13/ Production Part
+ 14/ End-Caps
+ 15/ Production Part
+ 16/ End-Caps
+ 
+
+ *** SILVER_EXTRA_PART (Part 3) ***
+
+ For Part 3, everything is the same except that the Production Part file is: SILVER_EXTRA_PART_OFFSET. 
+ 
+ 

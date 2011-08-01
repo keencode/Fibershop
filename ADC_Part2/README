@@ -1,0 +1,8 @@
+ADC Part 2 April 2010
+
+  ADC Part 2 is a variation on the original RVA Triangle Part, after iterating through a few designs.  
+
+  Candidates for the design are in ADC_Releases/.
+  Step-by-step factory instructions for building the part are in RVA_production_notes.txt
+  
+  The RVA production code and version of Fibershop is included in the RVA/ directory.  This version of RVA is a Java program that utilizes Processing's libraries for visualization.  This version of RVA was developed using the Eclipse IDE (not the Processing IDE).
