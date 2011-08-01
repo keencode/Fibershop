@@ -1,0 +1,24 @@
+Scripts utilized to Produce ADC Part 1 based on a Scaffold design.  Run the scripts in the following order, omitting the scripts in parentheses: 
+
+1. A_Prepare.rvb 
+  Prepares the symmetrical scaffold of points for the pattern, the 
+  Script will ask whether or not to clean up old layers (hit 'y' to start fresh from the beginning).
+  Takes a while to run. 
+
+2. B_Project.rvb      
+  Projects the scaffold to the surface of the mandrel.  Make sure that all layers are visible in order to run.
+
+3. C_Rails.rvb   ( do not run: C_RailsLift.rvb )
+  Runs lines length-wise ("rails") along the surface of the mandrel in order to intersect with the projected scaffold.  Varying the density of rails that contour the surface allows one to design for denser sets of points that round the corners of the mandrel.
+
+4. D_Points.rvb  ( do not run: D_PointsLift.rvb )
+  Calculates the Points for the curves based on the intersection of the projected curves and the rails.
+
+5. E_Process.rvb ( do not run: E_ProcessOld.rvb )
+  Process the Points for ADC production:
+  - Adds Surface Normal Vectors
+  - Adds Tangent Vectors
+  - Calculates tape distance along the points
+
+6. F_Tape.rvb
+  "Tapes" the resulting points in order to visualize the final taped pattern.  Note that the taped pattern is not an EXACT replica of the resulting taped mandrel (i.e. it shows poorly the built up areas after many plys).

@@ -1,0 +1,84 @@
+﻿Option Explicit
+
+Call Main()
+
+Sub Main()
+	Dim strMan
+	Dim arrObjects, strChild, strObj
+	Dim strPly, strPlyLayer, strLine
+	Dim i: i = 0
+	Dim cmd, dblWidth
+	Dim strLine0, strLine1, arrIntersections
+	Dim strAngle
+	
+	
+	If(Rhino.IsLayer("Temp")) Then 
+		Rhino.PurgeLayer "Temp"
+	End If
+	Rhino.AddLayer "Temp", RGB(250,250,250)
+	
+	If(Rhino.IsLayer("NewAngle0")) Then 
+		Rhino.PurgeLayer "NewAngle0"
+	End If
+	Rhino.AddLayer "NewAngle0", RGB(255,0,0),,,"Ply0"
+
+	If(Rhino.IsLayer("OldAngle0")) Then 
+		Rhino.PurgeLayer "OldAngle0"
+	End If
+	Rhino.AddLayer "OldAngle0", RGB(255,0,0),,,"Ply0"	
+	
+	Rhino.CurrentLayer "Temp"
+	
+	' Get the Angle0 Layer
+	arrObjects = Rhino.ObjectsByLayer("Angle0")
+	strAngle = arrObjects(0)
+	
+	' Step through the Intersection-Top Points And plot a corrected Angle Point
+	Dim dblCorrection
+	Dim strMarker, arrAnglePnt, strNewAnglePnt
+	Dim arrPnts, arrPnt, strPnt, arrResults
+	
+	arrPnts = Rhino.ObjectsByLayer("Error")
+	For i = 0 To UBound(arrPnts)
+		arrPnts(i) = Rhino.PointCoordinates(arrPnts(i))			
+	Next
+	arrPnts = Rhino.SortPoints(arrPnts)
+	
+	For Each arrPnt In arrPnts
+		' Error is the y-direction: linearly scaled to correct the angle
+		dblCorrection = (0.005) * arrPnt(2) ' Nudge by Error
+		Rhino.Print("Correction: " + CStr(dblCorrection))
+
+		' Get the current Angle at that particular X value
+		strMarker = Rhino.AddLine(Array(arrPnt(0),0,-180), Array(arrPnt(0),0,180)) 'Create line to evaluate Z-value (i.e. degree)
+		arrResults = Rhino.CurveCurveIntersection(strAngle, strMarker)
+		arrAnglePnt = arrResults(0,1) ' Grab the intersecting point
+		Rhino.DeleteObject(strMarker)	'Clear the Marker line
+		
+		strNewAnglePnt = Rhino.AddPoint(Array(arrAnglePnt(0), 0, arrAnglePnt(2) - dblCorrection))
+		Rhino.ObjectLayer strNewAnglePnt, "NewAngle0"
+	Next	
+	
+	' Move Angle0 to "OldAngle0"
+	arrPnts = Rhino.ObjectsByLayer("NewAngle0")
+	For i = 0 To UBound(arrPnts)
+		arrPnts(i) = Rhino.PointCoordinates(arrPnts(i))			
+	Next
+	
+	' Add End Points
+	arrPnts = Rhino.SortPoints(arrPnts)
+	Rhino.ObjectLayer Rhino.AddPoint(Array(0,0,arrPnts(0)(2))), "NewAngle0"
+	Rhino.ObjectLayer Rhino.AddPoint(Array(110,0,arrPnts(UBound(arrPnts)-1)(2))), "NewAngle0"
+	
+	' Grab and Sort the Points Again
+	arrPnts = Rhino.ObjectsByLayer("NewAngle0")
+	For i = 0 To UBound(arrPnts)
+		arrPnts(i) = Rhino.PointCoordinates(arrPnts(i))			
+	Next
+	arrPnts = Rhino.SortPoints(arrPnts)
+	
+	strAngle = Rhino.AddPolyline(arrPnts)
+	Rhino.ObjectLayer strAngle, "NewAngle0"
+	
+	'End of Main method
+End Sub

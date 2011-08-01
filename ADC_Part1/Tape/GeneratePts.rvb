@@ -1,0 +1,874 @@
+﻿Option Explicit
+
+Call Main()
+
+Sub Main()
+	Dim dblMin, dblMax, intDeg
+	Dim arrRails, arrDir(2), arrPts, arrLines, arrLines1, arrLines2, arrJoin1, arrJoin2, arrRailsO
+	Dim boolClockwise
+	Dim intDens
+	Dim strMan, strAxis, strAns, strK1, strK2
+	Dim strStart, strEnd, arrStart, arrEnd
+	Dim arrNormal, arrTapingDir
+	Dim arrObjects, strChild, strObj
+	Dim intPly: intPly = 0
+	Dim strPly
+	Dim strPlyLayer
+
+	'strAxis = Rhino.GetObject("Select central axis", 4)
+	arrObjects = Rhino.ObjectsByLayer("Axis")
+	strAxis = arrObjects(0)	
+		
+	' Search for the Mandrel Surface (ignoring anything else on this layer)
+	Rhino.LayerVisible "Mandrel", True
+	strMan = ""
+	arrObjects = Rhino.ObjectsByLayer("Mandrel")
+	'strMan = Rhino.GetObject("Select the mandrel surface.", 8, , True)
+	' strMan = arrObjects(0)
+	For Each strObj In arrObjects
+		If(Rhino.IsSurface(strObj)) Then
+			strMan = strObj
+			Exit For
+		End If
+		If(Rhino.IsPolysurface(strObj)) Then
+			strMan = strObj
+			Exit For
+		end if
+	Next
+	' Check that Mandrel exists
+	
+	Rhino.CurrentLayer "Mandrel"
+	
+	' Loop through the Strips 
+	Do
+		' Which layer to generate points?
+		'strPly = Rhino.GetString("Generate Pts on Ply: ")
+		'If(strPly = "") Then Exit Do
+		'intPly = CInt(strPly)
+		
+		strPlyLayer = "Ply" + CStr(intPly)
+		If(Rhino.IsLayer(strPlyLayer)) Then
+			Rhino.Print("Processing " + strPlyLayer)	
+			Rhino.LayerVisible "Rails" + CStr(intPly), True	
+			arrRails = Rhino.ObjectsByLayer("Rails" + CStr(intPly)) ' Rails prepared external
+			
+			'	strStart = Rhino.GetObject("Select base curve", 4)
+			Rhino.LayerVisible "Start" + CStr(intPly), True	
+			arrObjects = Rhino.ObjectsByLayer("Start" + CStr(intPly))
+			strStart = arrObjects(0)	
+			Rhino.LayerVisible "End" + CStr(intPly), True	
+			arrObjects = Rhino.ObjectsByLayer("End" + CStr(intPly))
+			strEnd = arrObjects(0)
+	
+			If Not Rhino.IsCurvePlanar(strStart) Then
+				Rhino.Print "Curve on layer Start" + CStr(intPly) + " must be planar! Script cancelled."
+				Exit Sub
+			End If
+
+			If Not Rhino.IsCurvePlanar(strEnd) Then
+				Rhino.Print "Curve on layer End" + CStr(intPly) + " must be planar! Script cancelled."
+				Exit Sub
+			End If
+			
+			'Get user specified data concerning the wrapping speed 
+			'dblMin = Rhino.GetReal("Specify the starting angle in degrees (min angle). Angle must be less than 90")
+			'dblMin = 15
+			'dblMax = Rhino.GetReal("Specify the final angle in degrees (max angle). Angle must be less than 90")
+			'dblMax = 15
+			
+			'intDeg = Rhino.GetReal("Specify the degree of the polynomial. Must be positive number. Read intructions for more info")
+			'intDeg = 1
+	
+			' Normal may be Taping Direction... which needs to be reversed in negative taping dir			
+			arrNormal = Rhino.CurveNormal (strStart)  
+			
+			arrStart = Rhino.CurveStartPoint(strStart)
+			arrEnd = Rhino.CurveEndPoint(strEnd)
+			' Construct the Taping Direction Vector 
+			arrTapingDir = Rhino.VectorUnitize(Rhino.VectorCreate(Array(arrEnd(0),0,0), Array(arrStart(0),0,0)))
+			
+			arrRailsO = arrRails
+			If Not IsArray(arrRails) Then
+				Rhino.Print "Problem with Rails Layer"
+				Exit Sub
+			End If
+   
+			' Set-Up Processing Layers 			
+			' Strip's Pnts
+			If(Rhino.IsLayer("Pnts" + CStr(intPly))) Then 
+				Rhino.PurgeLayer "Pnts" + CStr(intPly)
+			End If
+			Rhino.AddLayer "Pnts" + CStr(intPly), RGB(255,255,100),,,strPlyLayer			
+			' Strip's Normals
+			If(Rhino.IsLayer("Normals" + CStr(intPly))) Then 
+				Rhino.PurgeLayer "Normals" + CStr(intPly)
+			End If
+			Rhino.AddLayer "Normals" + CStr(intPly), RGB(255, 0, 0),,,strPlyLayer			
+			' Strip's CurveNormals
+			If(Rhino.IsLayer("CurveNormals" + CStr(intPly))) Then 
+				Rhino.PurgeLayer "CurveNormals" + CStr(intPly)
+			End If
+			Rhino.AddLayer "CurveNormals" + CStr(intPly), RGB(0, 127, 0),,,strPlyLayer			
+			' Strip's CurveNormals
+			If(Rhino.IsLayer("CurveTangents" + CStr(intPly))) Then 
+				Rhino.PurgeLayer "CurveTangents" + CStr(intPly)
+			End If
+			Rhino.AddLayer "CurveTangents" + CStr(intPly), RGB(127, 127, 0),,,strPlyLayer						
+			' Strip's Directions
+			If(Rhino.IsLayer("Directions" + CStr(intPly))) Then 
+				Rhino.PurgeLayer "Directions" + CStr(intPly)
+			End If
+			Rhino.AddLayer "Directions" + CStr(intPly), RGB(0, 0, 255),,,strPlyLayer				
+			' Strip's Angles
+			If(Rhino.IsLayer("Angles" + CStr(intPly))) Then 
+				Rhino.PurgeLayer "Angles" + CStr(intPly)
+			End If
+			Rhino.AddLayer "Angles" + CStr(intPly), RGB(255, 255, 200),,,strPlyLayer
+			
+			'Do Helix Loop
+			' arrDir = Rhino.GetObjects("Select starting curve for the helix and the adjacent curve to secify winding direction.", 4) 
+			
+			'Grab the First and Second Rail for the direction
+			arrObjects = Rhino.ObjectsByName("First" + CStr(intPly))
+			If(IsArray(arrObjects)) Then
+				arrDir(0) = arrObjects(0)
+			Else
+				Rhino.Print("Rail: First" + CStr(intPly) + " not named")
+				arrDir(0) = arrRails(0)
+				Rhino.ObjectName arrDir(0), "First" + CStr(intPly)
+				Rhino.ObjectColor arrDir(0), RGB(0, 0, 255) 
+			End If
+			
+			arrObjects = Rhino.ObjectsByName("Second" + CStr(intPly))
+			If(IsArray(arrObjects)) Then
+				arrDir(1) = arrObjects(0)
+			Else
+				Rhino.Print("Rail: Second" + CStr(intPly) + " not named")
+				arrDir(1) = arrRails(1)
+				Rhino.ObjectName arrDir(1), "Second" + CStr(intPly)
+				Rhino.ObjectColor arrDir(1),  RGB(255, 0, 255) 
+			End If
+			
+			'Construct arrRails so that wrapping proceeds as desired by user
+			Rhino.Print "UBound of arrRails " & UBound(arrRails)
+			Rhino.Print "UBound of arrDir " & UBound(arrDir)
+			
+			' Calculate Wrapping Direction
+			Dim arrFirstPnt, arrSecondPnt, dblFirstAngle, dblSecondAngle
+			' Dim arrZAxisPnt, arrAxisPnt, arrZAxisVector, arrFirstVector, arrSecondVector
+			arrFirstPnt = Rhino.CurveStartPoint(arrDir(0))
+			arrSecondPnt = Rhino.CurveStartPoint(arrDir(1))
+
+			dblFirstAngle = Rhino.ToDegrees(Rhino.ATan2(arrFirstPnt(2), arrFirstPnt(1)))
+			dblSecondAngle = Rhino.ToDegrees(Rhino.ATan2(arrSecondPnt(2), arrSecondPnt(1)))
+			Rhino.Print "First Atan2: " & dblFirstAngle
+			Rhino.Print "Second Atan2: " & dblSecondAngle
+			If(dblFirstAngle < dblSecondAngle) Then
+				Rhino.Print "Clockwise"
+				boolClockwise = True
+			Else
+				Rhino.Print "CCW"
+				boolClockwise = False
+			End If
+						
+			arrRails = Org(arrRailsO, arrDir)
+			If Not IsArray(arrRails) Then
+				Rhino.Print "Problem constructing arrRails, after Org"
+				Exit Sub
+			End If
+			arrRails = CheckOrient(arrRails, arrTapingDir, strStart, strEnd)
+  
+			'Generate Helix
+			If Not IsArray(arrRails) Then
+				Rhino.Print "Problem constructing arrRails, after CheckOrient"
+				Exit Sub
+			End If
+      
+			Rhino.Command "_Front" ' *** REQUIRED BY THE Section Command ***
+			arrPts = Gen(strMan, arrRails, dblMin, dblMax, intDeg, boolClockwise, strStart, strEnd, arrTapingDir, intPly)
+			Rhino.Command "_Top"
+			Rhino.Command "_Perspective"
+		
+			Rhino.EnableRedraw(True)
+				
+			' strAns = Rhino.GetString ("Would you like to draw another helix? y or n")
+			' If Not(strAns = "y") Then Exit Do
+			'Loop ' End Helix Loop
+				
+			intPly = intPly + 1
+		Else
+			Rhino.Print("Done Processing Strips")
+			Exit Do
+		End If
+	Loop
+	'End of Main method
+End Sub
+  
+
+'#################### Gen #################
+'Function to generate a helix
+Function Gen(strMan, arrRails, dblMin, dblMax, intDeg, boolClockwise, strStart, strEnd, arrNormal, intPly)
+	Dim arrIntB, arrBP, arrNP, arrBPO, arrPts()
+	Dim arrStartPlane
+	Dim dblRad, dblDeg, dblPP
+	Dim arrAnglePlotPnt, strAnglePlotPnt, arrProgressPlotPnt, strProgressPlotPnt
+	Dim strAngleCurve
+	Dim strBP, strSec, strNP
+	Dim intTotal: intTotal = 1
+	Dim intCount: intCount = 1
+	Dim arrParam, arrNormalVector, strNormalVector
+	Dim arrSecNormal, strSecNormalVector
+	Dim arrDir, strDirVector
+	Dim strTape: strTape = ""
+	Dim dblSDist: dblSDist = 0.0
+	Dim dblTotalDist
+	Dim arrPrevPnt
+	Dim dblParam, arrSecTangent, strTangentVector
+			
+	' Grab the Angle Curve from the "Angle" layer	
+	strAngleCurve = (Rhino.ObjectsByLayer("Angle" + CStr(intPly)))(0)
+	
+	'Find first base point
+	arrIntB = Rhino.CurveCurveIntersection(arrRails(0), strStart)
+	If IsNull(arrIntB) Then Rhino.Print "problem intersecting!"
+	arrBP = arrIntB(0,1)
+	arrBPO = arrBP
+	ReDim Preserve arrPts(0)
+	arrPts(0) = arrBPO
+	
+	' Add the First point in the Tape
+	strBP = Rhino.AddPoint(arrBP) 
+	Rhino.ObjectLayer strBP, "Pnts" + CStr(intPly)
+	Rhino.ObjectName strBP, CStr(intTotal)
+	Rhino.SetUserText strBP, "Pnt", CStr(intTotal)
+	
+	' Calculate the distance btw the start point and the End Plane
+	arrStartPlane = Rhino.PlaneFromNormal (arrBPO, arrNormal)
+	dblTotalDist = Abs(Rhino.DistanceToPlane(arrStartPlane, Rhino.CurveStartPoint(strEnd)))
+	Rhino.Print "dblTotalDist: " & CStr(dblTotalDist)
+
+	' Calculate the Progress 
+	dblPP = PercentProgress(arrBP, arrBPO, arrNormal, dblTotalDist) ' this should be 0 b/c arrBP = arrBP0
+	Rhino.SetUserText  strBP, "Progress", CStr(dblPP)
+	
+	' Plot Progress into Physical Space
+	'arrProgressPlotPnt =  arrBP
+	'arrProgressPlotPnt(1) = 0 ' Y value is set to 0, while X stays the same
+	'arrProgressPlotPnt(2) = -20 + dblPP * 10 ' Z value of the dblPP is the Progress scaled by 10
+	'strProgressPlotPnt = Rhino.AddPoint(arrProgressPlotPnt) 
+	'Rhino.ObjectLayer strProgressPlotPnt, "Progress" + CStr(intPly)
+	
+	' Calculate the Angle
+	'dblDeg = Alpha(intDeg, dblMin, dblMax, dblPP)
+	'dblDeg = EvaluateAngle(strAngleCurve, arrBP)
+	dblDeg = TapingAngle(strAngleCurve, arrBP, intPly)
+	dblRad = Rhino.ToRadians(dblDeg)
+	dblDeg = arrNormal(0) * dblDeg 'orient dblDeg according to Taping Direction	
+	' Rhino.Print "Current angle " & CStr(dblDeg)
+	
+	' Plot the Angle in Physical space
+	arrAnglePlotPnt =  arrBP
+	arrAnglePlotPnt(1) = 0 ' Y value is set to 0, while X stays the same
+	arrAnglePlotPnt(2) = arrNormal(0) * dblDeg ' Z value of the AnglePlotPnt is the Degrees
+	strAnglePlotPnt = Rhino.AddPoint(arrAnglePlotPnt) 
+	Rhino.ObjectLayer strAnglePlotPnt, "Angles" + CStr(intPly)
+		
+	' Save Orientation Angle for every point
+	Rhino.SetUserText strBP, "Angle", CStr(dblDeg)
+
+	' Update the Taping Strip to calculate the distance
+	'		If(strTape = "") Then
+	' Create a Curve of the Taping Strip
+	'			strTape = Rhino.AddPolyline(arrPts)
+	'			Rhino.ObjectLayer strTape, strLayerName
+	'		Else
+	'Rhino.ExtendCurvePoint strTape, 1, arrNP		
+	'		End If
+		
+	' Set the SDist - crows fly distance
+	Rhino.SetUserText strBP, "SDist", CStr(dblSDist)
+	arrPrevPnt = arrBP ' set the PrevPnt to the BasePnt
+
+	' Calculate NORMAL vector of the point 
+	' IF THERE IS AN ERROR: Check that nothing else is on the "Mandrel" layer
+	arrParam = Rhino.BrepClosestPoint (strMan, arrBP) ' arrParam(3) is the NORMAL vector
+	arrNormalVector = Rhino.VectorReverse (arrParam(3))
+	arrNormalVector = Rhino.VectorUnitize(arrNormalVector) ' Normalize the Normal Vector
+		
+	If(IsArray(arrNormalVector)) Then		
+		Rhino.SetUserText strBP, "Normal", Rhino.Pt2Str(arrNormalVector)	
+		strNormalVector = Rhino.AddLine(arrBP, Rhino.PointAdd(arrBP, arrNormalVector))
+		Rhino.ObjectLayer strNormalVector, "Normals" + CStr(intPly)
+	Else
+		Rhino.Print "Error: Normals"
+	End If
+	' Calculate Strip Distance
+		
+	' Calculate Direction Vector
+	'arrSecNormal = Rhino.CurveNormal(strSec)
+	If(IsArray(arrNormal)) Then
+		strSecNormalVector = Rhino.AddLine(arrBP, Rhino.PointAdd(arrBP, arrNormal))
+		Rhino.ObjectLayer strSecNormalVector, "CurveNormals" + CStr(intPly)	
+	Else 
+		Rhino.Print "Error: CurveNormal"
+	End If
+	
+	If(boolClockwise = True) Then
+		arrDir = Rhino.VectorRotate (arrNormal, -dblDeg, arrNormalVector)
+	Else
+		arrDir = Rhino.VectorRotate (arrNormal, -dblDeg, arrNormalVector)
+	End If
+	
+	' Normalize Direction Vector
+	arrDir =  Rhino.VectorUnitize(arrDir)
+	
+	If(IsArray(arrDir)) Then
+		Rhino.SetUserText strBP, "Direction", Rhino.Pt2Str(arrDir)
+		strDirVector = Rhino.AddLine(arrBP, Rhino.PointAdd(arrBP, arrDir))
+		Rhino.ObjectLayer strDirVector, "Directions" + CStr(intPly)
+	Else
+		Rhino.Print "Error: Directions"			
+	End If	
+	
+	' Set the Section Curve
+	strSec = strStart
+    
+	Do
+		Rhino.EnableRedraw(False)
+		
+		' Search the Next Point on the Rails
+		arrNP = PlotNext(arrBP, strSec, intCount, arrRails, dblRad)
+
+		' Add the New Point
+		If Not IsArray(arrNP) Then 
+			Rhino.Print "Gen: Failure to find the next point: arrNP"	
+			Exit Do
+		End If
+		
+		' Delete old section curve
+		' If intTotal>1 Then Rhino.DeleteObject strSec
+		arrBP = arrNP ' Update the Base Point Variable
+				
+		strNP = Rhino.AddPoint (arrNP)
+		Rhino.ObjectLayer strNP, "Pnts" + CStr(intPly)
+		Rhino.ObjectName strNP, CStr(intTotal)
+		Rhino.SetUserText strNP, "Pnt", CStr(intTotal)
+		
+		'Add to the array of point arrays
+		ReDim Preserve arrPts(intTotal)
+		arrPts(intTotal) = arrNP
+		
+		' Calculate the Progress 
+		dblPP = PercentProgress(arrBP, arrBPO, arrNormal, dblTotalDist)
+		Rhino.SetUserText strNP, "Progress", CStr(dblPP)
+		
+		' Plot Progress into Physical Space
+		'arrProgressPlotPnt =  arrBP
+		'arrProgressPlotPnt(1) = 0 ' Y value is set to 0, while X stays the same
+		'arrProgressPlotPnt(2) = -20 + dblPP * 10 ' Z value of the dblPP is the Progress scaled by 10
+		'strProgressPlotPnt = Rhino.AddPoint(arrProgressPlotPnt) 
+		'Rhino.ObjectLayer strProgressPlotPnt, "Progress" + CStr(intPly)
+		
+		' Calculate the Angle
+		' dblDeg = Alpha(intDeg, dblMin, dblMax, dblPP)
+		' dblDeg = EvaluateAngle(strAngleCurve, arrBP)
+		dblDeg = TapingAngle(strAngleCurve, arrBP, intPly)
+		dblRad = Rhino.ToRadians(dblDeg) ' keep radian positive for the PlotNext function
+		dblDeg = arrNormal(0) * dblDeg 'orient dblDeg according to Taping Direction
+		Rhino.Print "Current angle " & dblDeg
+		' Plot the Angle in Physical space
+		arrAnglePlotPnt =  arrNP
+		arrAnglePlotPnt(1) = 0 ' Y value is set to 0, while X stays the same
+		arrAnglePlotPnt(2) = arrNormal(0) * dblDeg ' Z value of the AnglePlotPnt is the Degrees
+		strAnglePlotPnt = Rhino.AddPoint(arrAnglePlotPnt) 
+		Rhino.ObjectLayer strAnglePlotPnt, "Angles" + CStr(intPly)
+		
+		' Save Orientation Angle for every point
+		Rhino.SetUserText strNP, "Angle", CStr(dblDeg)
+
+		' Update the Taping Strip to calculate the distance
+		'		If(strTape = "") Then
+		' Create a Curve of the Taping Strip
+		'			strTape = Rhino.AddPolyline(arrPts)
+		'			Rhino.ObjectLayer strTape, strLayerName
+		'		Else
+		'Rhino.ExtendCurvePoint strTape, 1, arrNP		
+		'		End If
+		
+		' Set the SDist - crows fly distance
+		dblSDist = dblSDist + Rhino.Distance (arrNP, arrPrevPnt)
+		Rhino.SetUserText strNP, "SDist", dblSDist
+		arrPrevPnt = arrNP 
+
+		' Calculate NORMAL vector of the point 
+		arrParam = Rhino.BrepClosestPoint (strMan, arrBP) 'arrParam(3) is the NORMAL vector
+		arrNormalVector = Rhino.VectorReverse (arrParam(3))
+		arrNormalVector = Rhino.VectorUnitize(arrNormalVector) ' Normalize the Normal Vector
+		
+		If(IsArray(arrNormalVector)) Then		
+			Rhino.SetUserText strNP, "Normal", Rhino.Pt2Str(arrNormalVector)	
+			strNormalVector = Rhino.AddLine(arrNP, Rhino.PointAdd(arrNP, arrNormalVector))
+			Rhino.ObjectLayer strNormalVector, "Normals" + CStr(intPly)
+		Else
+			Rhino.Print "Error: Normals"
+		End If
+		' Calculate Strip Distance
+		
+		' Calculate Direction Vector
+		'arrSecNormal = Rhino.CurveNormal(strSec)
+		If(IsArray(arrNormal)) Then
+			strSecNormalVector = Rhino.AddLine(arrNP, Rhino.PointAdd(arrNP, arrNormal))
+			Rhino.ObjectLayer strSecNormalVector, "CurveNormals" + CStr(intPly)	
+		Else 
+			Rhino.Print "Error: CurveNormal"
+		End If
+
+		dblParam = Rhino.CurveClosestPoint(strSec, arrNP)
+		arrSecTangent = Rhino.CurveTangent(strSec, dblParam)
+		If(IsArray(arrSecTangent)) Then
+			strTangentVector = Rhino.AddLine(arrNP, Rhino.PointAdd(arrNP, arrSecTangent))
+			Rhino.ObjectLayer strTangentVector, "CurveTangents" + CStr(intPly)
+		Else
+			Rhino.Print "Error: strTangentVector"			
+		End If
+	
+		If(boolClockwise = True) Then
+			arrDir = Rhino.VectorRotate (arrNormal, -dblDeg, arrNormalVector)			
+		Else
+			arrDir = Rhino.VectorRotate (arrNormal, -dblDeg, arrNormalVector) ' roll this in above			
+		End If	
+		
+		' Normalize the Direction Vector
+		arrDir = Rhino.VectorUnitize(arrDir) 
+		
+		If(IsArray(arrDir)) Then
+			Rhino.SetUserText strNP, "Direction", Rhino.Pt2Str(arrDir)
+			strDirVector = Rhino.AddLine(arrNP, Rhino.PointAdd(arrNP, arrDir))
+			Rhino.ObjectLayer strDirVector, "Directions" + CStr(intPly)
+		Else
+			Rhino.Print "Error: Directions"			
+		End If
+		
+		' Delete the old section
+		If intTotal>1 Then Rhino.DeleteObject strSec
+		strSec = Intersect(arrBP, arrNormal, strMan)
+		intTotal = intTotal+1
+		intCount = (intCount+1) Mod (UBound(arrRails)+1)
+        
+		If intCount = 0 Then 
+			Rhino.EnableRedraw(True)
+		End If
+     
+		' Stopping condition (reaching over the 100%)
+		If(dblPP > 1) Then Exit Do
+	Loop
+      
+	If(Not (strSec = strStart)) Then
+		Rhino.DeleteObject strSec ' clear the cross-section 
+	End If
+	
+	Gen = arrPts
+	'End of Gen function
+End Function
+      
+'##############################CheckOrient Function########################### 
+Function CheckOrient(arrRails, arrTapingDir, strStart, strEnd)
+	'	Dim arrBPlane, arrStartR, arrStartB, arrEndR
+	'	Dim dblY, dblN
+	'	Dim intCount
+	'	arrStartB = Rhino.CurveStartPoint(strStart)
+	'	arrStartR= Rhino.CurveStartPoint(arrRails(0))
+	'	arrEndR = Rhino.CurveEndPoint(arrRails(0))
+	'	arrBPlane = Rhino.PlaneFromNormal (arrStartB, arrNormal)
+	'	dblY = Abs(Rhino.DistanceToPlane (arrBPlane, arrStartR))
+	'	dblN = Abs(Rhino.DistanceToPlane (arrBPlane, arrEndR))
+   
+	'If dblN<dblY Then
+	'		For intCount = 0 To UBound(arrRails)
+	'			Call Rhino.ReverseCurve(arrRails(intCount))
+	'	Next
+	'	End If
+
+	Dim intCount
+	Dim arrStartRail, arrEndRail, arrRailVector
+	
+	For intCount = 0 To UBound(arrRails)
+		arrStartRail = Rhino.CurveStartPoint(arrRails(intCount))
+		arrEndRail = Rhino.CurveEndPoint(arrRails(intCount))
+		arrRailVector = Rhino.VectorUnitize(Rhino.VectorCreate(Array(arrEndRail(0),0,0),Array(arrStartRail(0),0,0)))
+		If(Not (arrRailVector(0) = arrTapingDir(0))) Then
+			Call Rhino.ReverseCurve(arrRails(intCount))
+		End If
+	Next
+
+	CheckOrient = arrRails
+End Function
+
+'################################## PlotNext Function ########################################
+Function PlotNext(arrBP, strSec, ByRef intCount, arrRails, dblRad)
+	'This function will output the next point of the wrapping
+	Dim dblT1, dblT2, dblNextT1, dblLSeg, dblLTot, dblX, dblY, dblR, dblTU, newT
+	Dim arrNextT2, arrDom, arrCut, arrNextCRV, arrTVS, arrITK, arrNextDom
+	Dim strNCrv
+
+	'Declare next point on the base curve
+	Dim arrPtx2
+	'	arrPtx2 = Rhino.CurveCurveIntersection (strSec , arrRails(intCount))
+	Do
+		' Try to skip to the next rail:
+		arrPtx2 = Rhino.CurveCurveIntersection (strSec, arrRails(intCount))
+		If(IsNull(arrPtx2)) Then
+			Rhino.Print("PlotNext: Null Point from Intersection")
+			intCount = (intCount+1) Mod (UBound(arrRails)+1)
+		Else
+			Exit Do ' arrPtx2 is good don't skip rail
+		End If
+	Loop
+	
+	' T values of base points on base curve
+	dblT1 = Rhino.CurveClosestPoint(strSec,arrBP)
+	dblT2 = Rhino.CurveClosestPoint(strSec,arrPtx2(0,1))
+	'Find T value of next base point on next rail
+	'dblNextT1 = Rhino.CurveClosestPoint(arrRails(intCount),arrPtx2(0,1))
+      
+	arrDom = Rhino.CurveDomain(strSec)
+	dblLTot = Rhino.CurveLength(strSec)
+      
+	'Format input for the CurveLength Function to find the distance between the two base points
+	If (dblT1<dblT2) Then
+		arrCut = Array(dblT1, dblT2)
+	End If
+	If (dblT2<=dblT1) Then
+		arrCut = Array(dblT2, dblT1)
+	End If
+	'End Format
+    
+	'Tentative Length of the segment
+	dblLSeg = Rhino.CurveLength(strSec, ,arrCut)
+
+	'Making sure we find shortest distance between two points on the base curve
+	If (dblLTot/2)>=dblLSeg Then 
+		dblX = dblLSeg
+	End If
+    
+	If (dblLTot/2)<dblLSeg Then
+		dblX = dblLTot - dblLSeg
+	End If
+	'Rhino.Print "The distance to the next point along the base curve is " & dblX
+  
+	' Correct the Angle for the next Pnt: subtract from 90	
+	' dblY = dblX*Tan(dblRad)	s
+	dblY = dblX*Tan(Rhino.ToRadians(90) - dblRad)
+	'Rhino.Print "The next distance to move up is " & dblY
+    
+	newT = BSearchCurveTop(arrRails(intCount), dblY, .001, arrPtx2(0,1))
+    
+	'arrNextDom = Rhino.CurveDomain(arrRails(intCount))
+	'Interval to Keep
+	'arrITK = Array(dblNextT1, arrNextDom(1))
+	'Triming the next curve at the new base point
+	'strNCrv = Rhino.TrimCurve (arrRails(intCount), arrITK, False)
+	'T-values of divided curve. arrTVS(1) is the t-value of the next point
+	'arrTVS = Rhino.DivideCurveLength (strNCrv, dblY, , False)
+    
+	If IsNull(newT) Then
+		Rhino.Print "Finished Helix"
+		Exit Function
+	End If
+
+	PlotNext = Rhino.EvaluateCurve (arrRails(intCount), newT)
+
+	'Rhino.DeleteObject strNCrv
+End Function
+ 
+  'End of PlotNext Function
+
+'################################## Intersect Function #######################################
+'Function that takes in base point and surface and returns intersection curve
+
+Function Intersect(arrBPoint,arrNormal,srfMan)
+	Intersect = CreateSectionAtX(srfMan, arrBPoint(0))
+End Function
+
+Function CreateSectionAtX(strMan, dblX)
+	' Declare local variables
+	Dim saved, cmd
+	' Dim intBoundary: intBoundary = 100
+	
+	CreateSectionAtX = Null 	' Set default return value  
+	'Rhino.EnableRedraw False 	' For speed, turn of screen redrawing
+
+	saved = Rhino.SelectedObjects 	' Save any selected objects
+	Rhino.UnSelectAllObjects 	' Unselect all objects
+
+	' Select the objects to create the cut plane through
+	'Rhino.Command "_Front", 0 ' set the Perspective to the Front View (to make X Sections)
+	Rhino.Command "_Section JoinCurves=BySectionPlane _Enter", 0 ' Set the JoinCurves to create Joined Sections
+	Rhino.SelectObject strMan ' Select the Mandrel
+	cmd = "_Section " & CStr(dblX) & ",100 " & CStr(dblX) & ",-100 _Enter"
+	Rhino.Command cmd, 0
+
+	' Get the object created by Section and return it
+	CreateSectionAtX = Rhino.FirstObject
+
+	'Rhino.Command "_Top", 0
+	'Rhino.Command "_Perspective", 0
+	
+	Rhino.UnSelectAllObjects 	' Unselect all objects	
+	If IsArray(saved) Then Rhino.SelectObjects(saved) ' If any objects were selected before calling this function, re-select them
+
+	Rhino.EnableRedraw True 	' Don't forget to turn redrawing back on
+End Function
+
+Function OldIntersect(arrBPoint,arrNormal,srfMan)
+    
+	Dim intXtra
+	Dim arrCheck
+	Dim arrPieces()
+	Dim arrPlane: arrPlane = Rhino.PlaneFromNormal(arrBPoint, arrNormal)
+	Dim strCircle: strCircle = Rhino.AddCircle(arrPlane, 50000)
+	Dim arrTemp: arrTemp = Array(strCircle)
+	Dim arrDisk: arrDisk = Rhino.AddPlanarSrf(arrTemp)
+	Dim arrXC: arrXC = Rhino.SurfaceSurfaceIntersection(arrDisk(0), srfMan, , True)
+	Call Rhino.DeleteObject (arrDisk(0))
+	Call Rhino.DeleteObject (strCircle)
+  
+	If UBound(arrXC)=0 Then
+		If Not Rhino.IsCurveClosed(arrXC(0,1)) Then Rhino.Print "The section curve is not closed!"
+		Intersect = arrXC(0,1)
+	Else
+		Rhino.Print "In intersect exception " & CStr(UBound(arrXC)+1) & " pieces." 
+    
+		For intXtra = 0 To UBound(arrXC)
+			ReDim Preserve arrPieces(intXtra)
+			arrPieces(intXtra) = arrXC(intXtra,1)
+		Next
+		arrCheck = Rhino.JoinCurves (arrPieces)
+		If IsNull(arrCheck) Then 
+			Rhino.Print "Error Joining Pieces"
+		Else
+			If Not Rhino.IsCurveClosed(arrXC(0,1)) Then Rhino.Print "The section curve is not closed!"
+			Intersect = arrCheck(0)
+		End If
+    
+	End If
+
+	'End of Intersect(...) function
+End Function
+
+
+'############ PercentProgress function ###################
+
+Function PercentProgress(arrBP, arrBPO, arrNormal, dblTotal)
+	Dim arrStartPlane
+	Dim dblD
+	arrStartPlane = Rhino.PlaneFromNormal (arrBPO, arrNormal)
+	dblD = Abs(Rhino.DistanceToPlane (arrStartPlane, arrBP))
+   
+	'	If Abs(Rhino.DistanceToPlane(arrStartPlane, Rhino.CurveStartPoint(arrRails(0)))) > Abs(Rhino.DistanceToPlane(arrStartPlane, Rhino.CurveEndPoint(arrRails(0)))) Then
+	'	dblTotal = Abs(Rhino.DistanceToPlane(arrStartPlane, Rhino.CurveStartPoint(arrRails(0)))) 
+	'	Else
+	'		dblTotal = Abs(Rhino.DistanceToPlane(arrStartPlane, Rhino.CurveEndPoint(arrRails(0))))
+	'	End If
+   
+	'Rhino.Print "dblTotal " & dblTotal
+	'Rhino.Print "dblD " & dblD
+   
+	PercentProgress = dblD/dblTotal
+	'	Rhino.Print "Current Progress " & PercentProgress
+ 
+
+	'End percent progress function
+  
+End Function
+    
+    
+    '################## Alpha ############################
+Function Alpha(intDeg, dblMin, dblMax, dblPP)
+	'returns angle in degrees
+	'y=(x^n)+dblMin
+	Dim dblUB: dblUB = (dblMax-dblMin)^(1/intDeg)
+	Dim dblXVal: dblXVal = dblUB*dblPP
+	Alpha = (dblXVal^intDeg) + dblMin
+End Function
+
+'################## EvaluateAngle ############################
+Function EvaluateAngle(strAngleCurve, dblBP)
+	Dim arrDomain
+	Dim dblParam
+	Dim arrPnt
+	
+	If Rhino.IsCurve(strAngleCurve) Then
+		arrDomain = Rhino.CurveDomain(strAngleCurve)
+		'dblParam = arrDomain(1) * dblBP
+		'arrPnt = Rhino.EvaluateCurve(strAngleCurve, dblParam)
+		arrPnt = Rhino.EvaluateCurve(strAngleCurve, dblBP(0)) ' evaluate with X-value
+		EvaluateAngle = arrPnt(2) ' Z-value of the AngleCurve is the Angle
+		' Rhino.AddPoint arrPoint
+	Else
+		Rhino.Print "ERROR - no Angle Curve"
+		EvaluateAngle = 45 ' error - default to 45 degrees
+	End If
+End Function
+   
+'################## EvaluateAngle ############################
+Function TapingAngle(strAngleCurve, arrBP, intPly)
+	Dim strMarker
+	Dim arrResults
+	Dim arrPnt
+	
+	Rhino.CurrentLayer "Angle" + CStr(intPly)
+	
+	If Rhino.IsCurve(strAngleCurve) Then
+		strMarker = Rhino.AddLine(Array(arrBP(0),0,-180), Array(arrBP(0),0,180)) 'Create line to evaluate Z-value (i.e. degree)
+		arrResults = Rhino.CurveCurveIntersection(strAngleCurve, strMarker)
+		arrPnt = arrResults(0,1) ' Grab the intersecting point
+		Rhino.DeleteObject(strMarker)	'Clear the Marker line	
+		TapingAngle = arrPnt(2)
+	Else
+		Rhino.Print "ERROR - no Angle Curve"
+		TapingAngle = 45 ' error - default to 45 degrees
+	End If
+End Function
+
+'################ Org ########################
+'Function to organize arrRails
+    
+Function Org(arrRails, arrBase1)
+	Dim intI, intFound, intGet
+	Dim temp: temp = arrRails
+	intI = 0
+	intFound = -1
+  
+	Do
+		'Find starting curve
+		If arrRails(intI) = arrBase1(0) Then
+			intFound = intI
+		End If
+		If intFound > -1 Then Exit Do  
+		intI = intI +1            
+	Loop
+      
+	'Find direction
+      
+	If arrRails((intFound + 1) Mod (UBound(temp)+1)) = arrBase1(1) Then
+		'no change of direction necessary
+		For intI = 0 To UBound(temp)
+			intGet = (intI + intFound) Mod (UBound(temp)+1)
+			arrRails(intI) = temp(intGet)
+		Next
+        
+	Else
+		'change of direction
+		For intI = 0 To UBound(temp)
+			intGet = intFound - intI
+			If intGet >= 0 Then
+				arrRails(intI) = temp(intGet)
+			Else
+				intGet = (UBound(temp)+1)+intGet
+				arrRails(intI) = temp(intGet)
+			End If
+		Next     
+	End If
+	
+	Rhino.Print "First Rail: " + Rhino.ObjectName(arrRails(0))
+	Rhino.Print "Second Rail: " + Rhino.ObjectName(arrRails(1))
+	
+	Org = arrRails
+	'End of Organize function
+End Function
+            
+            
+'############################### Binary Search algorithm #######################################
+' intDir is indicates the direction of the seach 1 for ahead 0 for behind, assuming that the start of the curve is at the base curve
+
+Function BSearchCurveTop(ByVal idCrv, ByVal Length, ByVal Tolerance, ByVal arrBP)
+	BSearchCurveTop = Null
+	
+	Dim tmin, tmax
+	tmin = Rhino.CurveClosestPoint(idCrv, arrBP)
+	tmax = Rhino.CurveDomain(idCrv)(1)
+	    
+
+	'Rhino.Print "tmin " & tmin
+	'Rhino.Print "tmax " & tmax
+	    
+	If tmin = tmax Then 
+		Rhino.Print "exiting search"
+		Exit Function
+	End If
+
+	Dim Lcrv : Lcrv = Rhino.CurveLength(idCrv, , Array(tmin, tmax))
+	If Lcrv < Length Then Exit Function
+
+	Dim t0, t1, t
+	t0 = tmin
+	t1 = tmax
+	
+	Dim Ltmp	
+	Do
+		t = 0.5*(t1+t0)
+		'Rhino.print "searching..."
+		Ltmp = Rhino.CurveLength(idCrv, , Array(tmin, t))
+		If Abs(Ltmp - Length) < Tolerance Then Exit Do
+		
+		If Ltmp < Length Then
+			t0 = t
+		Else
+			t1 = t
+		End If
+	Loop
+	
+	'Rhino.Print "tplot " & t
+	'Rhino.Print "The desired length is " & Length
+	'Rhino.Print "The found length is " & Ltmp
+	
+	BSearchCurveTop = t
+End Function
+		
+'############################### Binary Search algorithm #######################################
+' intDir is indicates the direction of the seach 1 for ahead 0 for behind, assuming that the start of the curve is at the base curve
+Function BSearchCurveBottom(ByVal idCrv, ByVal Length, ByVal Tolerance, ByVal arrBP)
+	BSearchCurveBottom = Null
+	
+	Dim tmin, tmax
+	tmax = Rhino.CurveClosestPoint(idCrv, arrBP)
+	tmin = Rhino.CurveDomain(idCrv)(0)
+
+	'Rhino.Print "btmin " & tmin
+	'Rhino.Print "btmax " & tmax
+	    
+	If tmin = tmax Then 
+		Rhino.Print "exiting search"
+		Exit Function
+	End If
+	
+
+	Dim Lcrv : Lcrv = Rhino.CurveLength(idCrv, , Array(tmin, tmax))
+	If Lcrv < Length Then Exit Function
+
+	Dim t0, t1, t
+	t0 = tmin
+	t1 = tmax
+	
+	Dim Ltmp	
+	Do
+		t = 0.5*(t1+t0)
+		'Rhino.print "searching..."
+		Ltmp = Rhino.CurveLength(idCrv, , Array(t, tmax))
+		If Abs(Ltmp - Length) < Tolerance Then Exit Do
+		
+		If Ltmp < Length Then
+			t1 = t
+		Else
+			t0 = t
+		End If
+	Loop
+	
+	'Rhino.Print "tplot " & t
+	'Rhino.Print "The desired length is " & Length
+	'Rhino.Print "The found length is " & Ltmp
+	
+	BSearchCurveBottom = t
+End Function
+'------------------------------------------------------------------------------

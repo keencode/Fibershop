@@ -1,0 +1,151 @@
+﻿Option Explicit
+
+Call Main()
+
+Sub Main()
+	Dim intPly: intPly = 0
+	Dim strPlyLayer
+	Dim arrPts
+	Dim strDocName, strFileName, objFSO, objStream
+	Dim strFirstPnt
+	
+	' Generate File Name to Save
+	strDocName = Rhino.DocumentName() ' grab the current CAD file name
+	strDocName = Replace(strDocName, ".3dm", "") ' strip the file extension
+	strFileName =  strDocName & "_" &  DatePart("m",Date) & DatePart("d",Date) & DatePart("yyyy",Date) & "_" & DatePart("h",Time) & "_" & DatePart("n",Time) & "_" & DatePart("s",Time) & ".txt"
+	
+	' Get the file system object
+	Set objFSO = CreateObject("Scripting.FileSystemObject")
+	On Error Resume Next
+
+	' Get a new text file
+	Set objStream = objFSO.CreateTextFile(strFileName, True)
+	If Err Then
+		MsgBox Err.Description
+		Exit Sub
+	End If
+
+	' Header
+	objStream.WriteLine("# File: " & strFileName) ' Include Design Date, Filename
+	objStream.WriteLine("begin")
+	objStream.WriteLine("#	 PlyNo 	 PlyAngle")
+	objStream.WriteLine("#	 StripNo")
+	objStream.WriteLine("#	 idx 	 X 	 Y 	 Z 	 I 	 J 	 K 	 SDist 	 Angle 	 InBounds 	 Dir X 	 Dir Y 	 Dir Z")
+	
+	
+	' Loop through the Strips 
+	Do
+		strPlyLayer = "Ply" + CStr(intPly)
+		If(Rhino.IsLayer(strPlyLayer)) Then
+			Rhino.Print("Processing " + strPlyLayer)	
+	
+			arrPts = Rhino.ObjectsByLayer("Pnts" + CStr(intPly)) ' Rails prepared external
+			strFirstPnt = Rhino.GetUserText (arrPts(0), "Pnt")	
+			Rhino.Print("First point is: " + strFirstPnt )
+			
+			If(strFirstPnt = "1") Then
+				Rhino.Print("    Point in the correct order")
+			Else	
+				Rhino.Print("    Reversing")
+				Reverse arrPts ' reverse the points from the layer b/c they are 'pushed' on LIFO
+			End If
+			
+			ExportPoints arrPts, intPly, strFileName, objStream
+			
+			intPly = intPly + 1
+		Else
+			Rhino.Print("Done Processing Strips")
+			Exit Do
+		End If
+	Loop
+	
+	' Footer
+	objStream.WriteLine("end")
+	
+	' Write the file
+	objStream.Close
+	'End of Main method
+End Sub
+ 
+'------------------------------------------------------------------------------
+' Subroutine: ExportPoints
+' Purpose:    Export points and point clouds to a text file.
+'------------------------------------------------------------------------------
+
+Function ExportPoints(arrObjects, intPly, strFileName, objStream)
+	Dim strObject, arrPoints, arrPoint, strPoint
+	Dim strDelim
+	Dim intPntCnt, strSDist, dblSDist, strAngle, strInBounds
+	Dim strNormal, arrNormal, strDirection, arrDirection
+	
+	' User-definable delimiter(s) : TAB as delim.
+	strDelim = "	"
+	strInBounds = "20000001H"
+	
+	' User-definable file filters
+	' strFilter = "ADC Text File (*.txt)|*.txt|All Files (*.*)|*.*||"
+
+	If IsNull(arrObjects) Then Exit Function
+
+	' Get the filename to create
+	'strFileName = Rhino.SaveFileName("Save Point Coordinates As", strFilter)
+	'If IsNull(strFileName) Then Exit Function
+
+	
+	' Exports Point Array in arrObjects
+	intPntCnt = 1 'count the points
+	For Each strObject In arrObjects
+		If Rhino.IsPoint(strObject) Then
+			arrPoint = Rhino.PointCoordinates(strObject) ' Grab World Coordinates
+			' Get the Normal Vector
+			strNormal = Rhino.GetUserText (strObject, "Normal")	
+			arrNormal = Rhino.Str2Pt(strNormal)
+			' Get the Orientation Angle
+			strSDist = Rhino.GetUserText (strObject, "SDist")
+			' Get the Orientation Angle
+			strAngle = Rhino.GetUserText (strObject, "Angle")			
+			' Get the Direction Vector
+			strDirection = Rhino.GetUserText (strObject, "Direction")
+			arrDirection = Rhino.Str2Pt(strDirection)
+
+			If(	intPntCnt = 1) Then
+				objStream.WriteLine("ply " & CStr(intPly+1) & " " & strAngle)
+				objStream.WriteLine("strip 1") ' always only 1 strip per ply			
+			End If
+			
+			If IsArray(arrPoint) Then
+				strPoint = "pt" & strDelim & CStr(intPntCnt) & strDelim
+				strPoint = strPoint	& CStr(arrPoint(0)) & strDelim & CStr(arrPoint(1)) & strDelim & CStr(arrPoint(2)) & strDelim
+				strPoint = strPoint	& CStr(arrNormal(0)) & strDelim & CStr(arrNormal(1)) & strDelim & CStr(arrNormal(2)) & strDelim
+				strPoint = 	strPoint & strSDist & strDelim		
+				strPoint = 	strPoint & strAngle & strDelim
+				strPoint = 	strPoint & strInBounds & strDelim
+				strPoint = strPoint	& CStr(arrDirection(0)) & strDelim & CStr(arrDirection(1)) & strDelim & CStr(arrDirection(2)) & strDelim
+							
+				' strPoint = strPreX & CStr(arrPoint(0)) & strPostX & strDelimiter & strPreY & CStr(arrPoint(1)) & strPostY & strDelimiter & strPreZ & CStr(arrPoint(2)) & strPostZ
+				' Write the point to the file
+				objStream.WriteLine(strPoint)
+				intPntCnt = intPntCnt + 1
+			End If		
+		Else
+			' Ignore Non-Points
+			Rhino.Print strObject, " is not a Point"
+		End If
+	Next
+	
+	ExportPoints = strFileName
+End Function
+
+
+Sub Reverse( ByRef myArray )
+	Dim i, j, idxLast, idxHalf, strHolder
+
+	idxLast = UBound( myArray )
+	idxHalf = Int( idxLast / 2 )
+
+	For i = 0 To idxHalf
+		strHolder              = myArray( i )
+		myArray( i )           = myArray( idxLast - i )
+		myArray( idxLast - i ) = strHolder
+	Next
+End Sub

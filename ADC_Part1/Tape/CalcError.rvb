@@ -1,0 +1,93 @@
+﻿Option Explicit
+
+Call Main()
+
+Sub Main()
+	Dim strMan
+	Dim arrObjects, strChild, strObj
+	Dim strPly, strPlyLayer, strLine
+	Dim intPly: intPly = 0
+	Dim cmd, dblWidth
+	Dim strLine0, strLine1, arrIntersections
+	Dim strAngle
+		
+	Rhino.CurrentLayer "Error"
+	
+	' Manage Layers
+	If(Rhino.IsLayer("Error")) Then 
+		Rhino.PurgeLayer "Error"
+	End If
+	Rhino.AddLayer "Error", RGB(255,0,227)
+
+	' Manage Layers
+	If(Rhino.IsLayer("ErrorLines")) Then 
+		Rhino.PurgeLayer "ErrorLines"
+	End If
+	Rhino.AddLayer "ErrorLines", RGB(225,0,200)	
+	
+	' Get the Angle0 Layer
+	arrObjects = Rhino.ObjectsByLayer("Angle0")
+	strAngle = arrObjects(0)
+	
+	' Get the lines		
+	arrObjects = Rhino.ObjectsByLayer("Line0")
+	strLine0 = arrObjects(0)
+	arrObjects = Rhino.ObjectsByLayer("Line1")
+	strLine1 = arrObjects(0)
+
+	Dim arrTop, arrRail, i
+	' Get Top Intersection Points
+	arrTop = Rhino.ObjectsByLayer("Top")
+	For i = 0 To UBound(arrTop) 
+		arrTop(i) = Rhino.PointCoordinates(arrTop(i))
+	Next
+	arrTop = Rhino.SortPoints(arrTop)
+	
+	arrRail = Rhino.ObjectsByLayer("TopRail")
+	For i = 0 To UBound(arrRail) 
+		arrRail(i) = Rhino.PointCoordinates(arrRail(i))
+	Next
+	arrRail = Rhino.SortPoints(arrRail)
+	
+	Rhino.Command("_Top")
+	
+	' Compare Point By Point
+	Dim dblRailParam, dblTopParam, strPnt, dblError, strErrorLine
+	For i = 0 To UBound(arrRail) 
+		dblRailParam = Rhino.CurveClosestPoint (strLine0, arrRail(i))
+		dblTopParam = Rhino.CurveClosestPoint (strLine0, arrTop(i)) 
+		' Use the Params to calc. Error (Proper)
+		dblError = dblRailParam - dblTopParam
+		' Use Distance (NOTE: it automatically ABS the Error
+		' dblError = Rhino.Distance(arrRail(i), arrTop(i))
+		Rhino.Print "-> Rail: " + CStr(dblRailParam) + " Top: " + CStr(dblTopParam) + " Error: " + CStr(dblError)
+	
+		strPnt = Rhino.AddPoint(Array(arrTop(i)(0),0, dblError))
+		Rhino.ObjectLayer strPnt, "Error"
+
+		strErrorLine = Rhino.AddLine(arrRail(i), arrTop(i))
+		Rhino.ObjectLayer strErrorLine, "ErrorLines"
+	Next	
+	
+	' Step through the Intersection-Top Points and plot a corrected Angle Point
+	'Dim dblCorrection
+	'Dim strMarker, arrAnglePnt, strNewAnglePnt
+	'arrPnts = Rhino.ObjectsByLayer("Top")
+	'For Each strPnt in arrPnts
+	'	arrPnt = Rhino.PointCoordinates(strPnt)		
+		' Error is the y-direction: linearly scaled to correct the angle
+	'	dblCorrection = (0.01) * (arrPnt(1) / 2.54)
+	'	Rhino.Print("Correction: " + CStr(dblCorrection))
+
+		' Get the current Angle at that particular X value
+	'	strMarker = Rhino.AddLine(Array(arrPnt(0),0,-180), Array(arrPnt(0),0,180)) 'Create line to evaluate Z-value (i.e. degree)
+	'	arrResults = Rhino.CurveCurveIntersection(strAngle, strMarker)
+	'	arrAnglePnt = arrResults(0,1) ' Grab the intersecting point
+	'	Rhino.DeleteObject(strMarker)	'Clear the Marker line
+		
+	'	strNewAnglePnt = Rhino.AddPoint(Array(arrPnt(0), 0, arrAnglePnt - dblCorrection))
+	'	Rhino.ObjectLayer strNewAnglePnt, "Angle0"
+	'Next	
+
+	'End of Main method
+End Sub

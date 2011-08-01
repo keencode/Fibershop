@@ -1,0 +1,138 @@
+﻿Option Explicit
+
+Call Main()
+
+Sub Main()
+	Dim arrPts
+	Dim strStart, strMan, strAxis
+	Dim arrNormal, strEnd, arrStart, arrEnd
+	Dim arrObjects, strChild, strObj
+	Dim strPly, strPlyLayer, strLine
+	Dim intPly: intPly = 0
+	Dim cmd, dblWidth
+	
+	'strAxis = Rhino.GetObject("Select central axis", 4)
+	arrObjects = Rhino.ObjectsByLayer("Axis")
+	strAxis = arrObjects(0)	
+		
+	' Search for the Mandrel Surface (ignoring anything else on this layer)
+	strMan = ""
+	arrObjects = Rhino.ObjectsByLayer("Mandrel")
+	'strMan = Rhino.GetObject("Select the mandrel surface.", 8, , True)
+	' strMan = arrObjects(0)
+	For Each strObj In arrObjects
+		If(Rhino.IsSurface(strObj)) Then
+			strMan = strObj
+			Exit For
+		End If
+		If(Rhino.IsPolysurface(strObj)) Then
+			strMan = strObj
+			Exit For
+		end if
+	Next
+	' Check that Mandrel exists
+	
+	Rhino.CurrentLayer "Mandrel"
+	
+	' Set the Tape Width
+	dblWidth = 0.375
+	
+	Rhino.Command "_Front"
+	
+	' Loop through the Strips 
+	Do
+		' Which layer to generate points?
+		' strPly = Rhino.GetString("Generate Pts on Ply: ")
+		' If(strPly = "") Then Exit Do
+		' intPly = CInt(strPly)
+		
+		strPlyLayer = "Ply" + CStr(intPly)
+		If(Rhino.IsLayer(strPlyLayer)) Then
+			Rhino.Print("Taping " + strPlyLayer)	
+				
+			' Start
+			arrObjects = Rhino.ObjectsByLayer("Start" + CStr(intPly))
+			strStart = arrObjects(0)	
+			' End
+			arrObjects = Rhino.ObjectsByLayer("End" + CStr(intPly))
+			strEnd = arrObjects(0)
+	
+			If Not Rhino.IsCurvePlanar(strStart) Then
+				Rhino.Print "Curve on layer Start" + CStr(intPly) + " must be planar! Script cancelled."
+				Exit Sub
+			End If
+
+			If Not Rhino.IsCurvePlanar(strEnd) Then
+				Rhino.Print "Curve on layer End" + CStr(intPly) + " must be planar! Script cancelled."
+				Exit Sub
+			End If
+			
+			' Normals and starting and stopping points
+			arrNormal = Rhino.CurveNormal (strStart)  
+			arrStart = Rhino.CurveStartPoint(strStart)
+			arrEnd = Rhino.CurveEndPoint(strEnd)
+						
+			' Strip's Pnts
+			arrPts = Rhino.ObjectsByLayer("Pnts" + CStr(intPly))			
+			Dim i
+			For i = 0 To UBound(arrPts)	
+				arrPts(i) = Rhino.PointCoordinates(arrPts(i))
+			Next
+
+			' Strip's Tape Viz Layer
+			If(Rhino.IsLayer("Line" + CStr(intPly))) Then 
+				Rhino.PurgeLayer "Line" + CStr(intPly)
+			End If
+			Rhino.AddLayer "Line" + CStr(intPly), RGB(255,255,150),,,strPlyLayer
+
+			Rhino.CurrentLayer "Line" + CStr(intPly)
+
+			strLine = Rhino.AddPolyline(arrPts) ' drop the center line
+			
+			' Strip's Tape Viz Layer
+			If(Rhino.IsLayer("Tape" + CStr(intPly))) Then 
+				Rhino.PurgeLayer "Tape" + CStr(intPly)
+			End If
+			Rhino.AddLayer "Tape" + CStr(intPly), RGB(128,128,128),,,strPlyLayer
+						
+			' Generate Curve
+			Rhino.CurrentLayer "Tape" + CStr(intPly)
+			'Rhino.UnselectAllObjects 
+			'Rhino.SelectObjects arrPts
+			'Rhino.Command "_CurveThroughPt _Enter"
+			strLine = Rhino.CopyObject(strLine)
+			Rhino.ObjectLayer strLine, "Tape" + CStr(intPly)
+			
+			' Move Line forward half-width
+			Rhino.UnselectAllObjects
+			arrObjects = Rhino.ObjectsByLayer("Tape" + CStr(intPly))
+			Rhino.SelectObject arrObjects(0) ' select the curve
+
+			'Rhino.Command "_CopyToClipBoard"
+			'Rhino.Command "_Paste"
+			cmd = "_Move 0,0 " & CStr(dblWidth/2) & ",0 _Enter"
+			Rhino.Command cmd
+			
+			' Copy, Paste, Move Line
+			Rhino.Command "_CopyToClipBoard"
+			Rhino.Command "_Paste"
+			cmd = "_Move 0,0 " & CStr(-dblWidth) & ",0 _Enter"
+			Rhino.Command cmd
+			
+			' Create Surfaces
+			Rhino.SelectObjects arrObjects
+			Rhino.Command "_EdgeSrf"
+			
+			' Inc for next layer
+			intPly = intPly + 1
+			
+			'Exit Do ' DEBUG for now	
+		Else
+			Rhino.Print("Done Processing Strips")
+			Exit Do
+		End If
+	Loop
+	
+	Rhino.Command "_Perspective"
+	'End of Main method
+End Sub

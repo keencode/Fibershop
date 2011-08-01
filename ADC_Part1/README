@@ -1,0 +1,36 @@
+ADC Composite Part 1 Fall 2009
+- Final Part 12/18/2009 
+
+This repository contains the production files for the graduated graphite manual Part 1 for ADC produced Fall 2009.  It was developed utilizing Rhino/RhinoScript files based originally on the WrappingTool.  
+
+Originally two parts were intended to be produced:
+  V1 - which is "Part 1" and was produced, was a graduated graphite mandrel.
+  	Latest Development File(s): V1_*.3dm
+
+  V2 - no produced (known as "Part 2") was a plaster twisted mandrel.
+	Latest Development File: V2_020.3dm 
+
+Part 1 (V1) production
+  For the composite wrapping production of Part 1, two wrapping systems were developed: 
+  
+  1. "Tape" - collection of RhinoScript files based on the WrappingTool, which wraps a single Ply at a time.  This approach was NOT used to build the final Part 1 due to the intractability of attaining symmetry between the two plys.
+
+	Latest Development File: V1_044.3dm
+
+  2. "Scaffold" - collection of RhinoScipt, re-written from scratch, which first builds a symmetrical scaffold of points which are projected to the mandrel surface to yield the final wrapped pattern.  This approach was used to produce the final part.
+
+	Latest Development File: V1_SYM_MOVE_036.3dm
+
+Workflow for the Part 1 Production
+
+1. Utilize a copy of V1_SYM_MOVE_036.3dm with Rhino 4
+2. Get the Rhino Monkey Script Editor for Rhino 4 
+   (http://wiki.mcneel.com/developer/monkeyforrhino4)
+3. Open the scripts from the Scaffold folder in the Monkey Editor in Rhino.
+4. Make sure that all layers are VISIBLE (all lightbulbs in the layers are visible)
+5. Run the scripts in alphabetical order (described further in Scaffold dir).
+
+
+
+
+

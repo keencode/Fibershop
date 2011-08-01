@@ -1,0 +1,274 @@
+﻿Option Explicit
+
+Call Main()
+
+Sub Main()
+	Dim strMan
+	Dim arrObjects, strChild, strObj
+	Dim strPly, strPlyLayer, strLine
+	Dim intPly: intPly = 0
+	Dim cmd, dblWidth
+	Dim strLine0, strLine1, arrIntersections
+	Dim strAngle
+	Dim dblEdgeAngle: dblEdgeAngle =  71.3255
+
+	Dim strName, arrLayers, boolSkip
+
+	' Search for the Mandrel Surface (ignoring anything else on this layer)
+	strMan = GrabByLayer("Mandrel")
+	Rhino.CurrentLayer "Temp"
+	
+	NewLayer "Temp", 255,0,0
+	
+	' Clean Out Old Layers - warning 
+	If(Rhino.GetString("*** WARNING *** About to clean out old layers?") = "") Then
+		Exit Sub
+	End If
+	
+	' Purge all except...
+	arrLayers = Rhino.LayerNames
+	For Each strName In arrLayers
+		boolSkip = False
+		If (strName = "Mandrel") Then boolSkip = True
+		If (strName = "Top") Then boolSkip = True
+		If (strName = "Temp") Then boolSkip = True
+		If (boolSkip = False) Then
+			Purge strName
+		End If
+	Next
+			
+	NewLayer "Axis", 0,0,255 
+	' NewLayer "Mids", 255,0,0	
+	
+	ProjectToXAxisLayer "Top", "Axis"
+
+	' Create Mid Points once, to get the Top and Bottom 
+	CreateMidPoints "Axis", "Axis" 
+	' Create Mid Points again, to get the Left and Right 
+	CreateMidPoints "Axis", "Axis" 		
+	' TEST: Create Mids on the flat surfaces -> "Mid"
+	' CreateMidPoints "Axis", "Mids" 		
+
+	NewLayer "PntsTopCW", 127,127,255
+	NewLayer "PntsTopCCW", 63,63,255 
+	NewLayer "PntsBotCW", 255,127,127
+	NewLayer "PntsBotCCW", 255,63,63 
+
+	NewLayer "TopCW", 127,127,255 
+	NewLayer "TopCCW", 63,63,255 
+	NewLayer "BotCW", 255,127,127 
+	NewLayer "BotCCW", 255,63,63 
+	
+	' Intersections - of the Intersections
+	ProjectPointsToMandrel "Axis", Array(0, dblEdgeAngle, 180, 360 - dblEdgeAngle), strMan, "PntsTopCW"
+	ProjectPointsToMandrel "Axis", Array(0, 360 - dblEdgeAngle, 180, dblEdgeAngle), strMan, "PntsTopCCW"
+	ProjectPointsToMandrel "Axis", Array(180, 360 - dblEdgeAngle, 0, dblEdgeAngle), strMan, "PntsBotCW"
+	ProjectPointsToMandrel "Axis", Array(180, dblEdgeAngle, 0, 360 - dblEdgeAngle), strMan, "PntsBotCCW"
+
+	' Intersections - of the Mid-Points on the Flat Surface
+	' ProjectPointsToMandrel "Mids", Array(dblEdgeAngle/2, dblEdgeAngle + ((180-dblEdgeAngle)/2), 180 + ((180-dblEdgeAngle)/2), 360 - (dblEdgeAngle/2)), strMan, "PntsTopCW"	
+	' ProjectPointsToMandrel "Mids", Array(dblEdgeAngle/2, 360 - (dblEdgeAngle/2), 180 + ((180-dblEdgeAngle)/2), dblEdgeAngle + ((180-dblEdgeAngle)/2)), strMan, "PntsTopCCW"
+	' ProjectPointsToMandrel "Mids", Array( 180 + ((180-dblEdgeAngle)/2), 360 - (dblEdgeAngle/2), dblEdgeAngle/2, dblEdgeAngle + ((180-dblEdgeAngle)/2)), strMan, "PntsBotCW"
+	' ProjectPointsToMandrel "Mids", Array(180 + ((180-dblEdgeAngle)/2), dblEdgeAngle + ((180-dblEdgeAngle)/2), dblEdgeAngle/2, 360 - (dblEdgeAngle/2)), strMan, "PntsBotCCW"
+	
+	' Scaffold
+	PolyLinePoints "PntsTopCW", True, "TopCW"
+	PolyLinePoints "PntsTopCCW", True, "TopCCW"
+	PolyLinePoints "PntsBotCW", True, "BotCW"
+	PolyLinePoints "PntsBotCCW", True, "BotCCW"
+
+	Rhino.CurrentLayer "Temp"
+End Sub
+
+Sub PolyLinePoints(pntLayer, boolXDirPositive, toLayer)
+	Dim arrObjects, strObj, arrPnt, arrPrevPnt, i
+	Dim strLine
+
+	Rhino.CurrentLayer toLayer ' keep the scraps in "Temp"
+	
+	' Convert Point Objects to PointCoordinates
+	arrObjects = Rhino.ObjectsByLayer(pntLayer)
+	For i = 0 To UBound(arrObjects) 
+		arrObjects(i) = Rhino.PointCoordinates(arrObjects(i))
+	Next
+
+	' Sort Points in X direction (ascending = boolXDirPositive == true)
+	arrObjects = Rhino.SortPoints(arrObjects, boolXDirPositive)
+
+	i = 0
+	For Each arrPnt In arrObjects 
+		If(IsArray(arrPnt)) Then
+			If(i = 0) Then ' skip the first point
+				arrPrevPnt = arrPnt
+			Else
+				strLine = Rhino.AddLine(arrPrevPnt, arrPnt)
+				' Rhino.ObjectLayer strLine, toLayer
+				arrPrevPnt = arrPnt
+			End If
+		End If
+		i = i + 1
+	Next	
+
+End Sub
+
+
+Sub ProjectCurvesToMandrel( fromLayer, strMan, toLayer )
+	Dim arrObjects, strObj, arrPnt, i 
+	Dim arrMidPnt, strMidPnt, arrDirection
+	Dim strCurve, arrCurves
+	Dim dblDist, dblNewDist, iClosest
+	iClosest = 0
+	dblDist = 9999.0
+	
+	Rhino.CurrentLayer "Temp"
+	arrObjects = Rhino.ObjectsByLayer(fromLayer)
+	
+	For Each strObj In arrObjects 
+		If(IsCurve(strObj)) Then
+			arrMidPnt = Rhino.CurveMidPoint(strObj) ' use MidPoint as Direction Vector
+			arrDirection = arrMidPnt
+			arrDirection(0) = 0 ' zero the X-component to get more orthogonal projection
+			arrDirection = Rhino.VectorUnitize(arrDirection)
+			
+			' Calculate 45 degree Direction Vectors from arrMidPnt
+			arrCurves = Rhino.ProjectCurveToSurface (strObj, strMan, arrDirection)
+			For i = 0 To UBound(arrCurves)
+				dblNewDist = Rhino.Distance(arrMidPnt, Rhino.CurveMidPoint(arrCurves(i)))
+				If(dblNewDist < dblDist) Then
+					iClosest = i
+					dblDist = dblNewDist
+				End If
+			Next
+			
+			Rhino.ObjectLayer arrCurves(iClosest), toLayer
+		End If
+	Next
+End Sub
+
+Sub ProjectPointsToMandrel(pntLayer, arrAngles, strMan, layerName)
+	Dim intCount
+	Dim arrObjects, strObj, arrPnt, i
+	Dim strLine
+	
+	Rhino.CurrentLayer "Temp" ' keep the scraps in "Temp"
+	Rhino.Print("ProjectPointsToMandrel-> " + layerName)
+	
+	' Convert Point Objects to PointCoordinates
+	arrObjects = Rhino.ObjectsByLayer(pntLayer)
+	For i = 0 To UBound(arrObjects) 
+		arrObjects(i) = Rhino.PointCoordinates(arrObjects(i))
+	Next
+	
+	' Sort Points in ascending X direction (default)
+	arrObjects = Rhino.SortPoints(arrObjects)
+
+	i = 0
+	intCount = 0
+	For Each arrPnt In arrObjects 
+		If(IsArray(arrPnt)) Then
+			ProjectPointByAngle arrPnt, strMan, arrAngles(intCount), layerName
+			i = i + 1
+			intCount = (intCount + 1) Mod (UBound(arrAngles) + 1) ' cycle angles count
+		End If
+	Next	
+End Sub
+
+Sub ProjectPointByAngle(arrPoint, strSurface, dblAngle, layerName)
+	Dim arrDirection, strDirection, arrPnts, strPnt, arrPnt
+	
+	Rhino.CurrentLayer "Temp"
+	arrDirection = Array(0,0,1)
+	arrDirection = Rhino.VectorRotate(arrDirection, dblAngle, Array(1,0,0))
+	Rhino.AddLine Array(0,0,0), arrDirection ' plot the vector
+	
+	arrPnts = Rhino.ProjectPointToSurface (arrPoint, strSurface, arrDirection)
+
+	If(UBound(arrPnts) < 1) Then ' only one point
+		strPnt = Rhino.AddPoint(arrPnts(0))		
+	Else ' two points 
+		arrDirection = Rhino.VectorScale(arrDirection, 10) ' scale up the direction vector
+		' By overshooting the surface, the closes point will guaranteed to be the desired point
+		' arrPnt = Rhino.PointArrayClosestPoint(arrPnts, arrDirection) ' this is ideal: but fails
+		
+		' Compare distances to arrDirection (i.e. the point on the Unit Circle
+		If(Rhino.Distance(arrPnts(0), arrDirection) < Rhino.Distance(arrPnts(1), arrDirection)) Then
+			strPnt = Rhino.AddPoint(arrPnts(0))		 
+		Else
+			strPnt = Rhino.AddPoint(arrPnts(1))	
+		End If
+	End If
+	
+	Rhino.ObjectLayer strPnt, layerName
+End Sub
+
+Sub CreateMidPoints(pntLayer, toLayer) 
+	Dim arrObjects, strObj, arrPnt, arrPrevPnt, i
+	Dim strLine, arrMidPnt, strMidPnt
+	
+	Rhino.CurrentLayer "Temp" ' keep the scraps in "Temp"
+	
+	' Convert Point Objects to PointCoordinates
+	arrObjects = Rhino.ObjectsByLayer(pntLayer)
+	For i = 0 To UBound(arrObjects) 
+		arrObjects(i) = Rhino.PointCoordinates(arrObjects(i))
+	Next
+
+	' Sort Points in ascending X direction (default)
+	arrObjects = Rhino.SortPoints(arrObjects)
+
+	i = 0
+	For Each arrPnt In arrObjects 
+		If(IsArray(arrPnt)) Then
+			If(i = 0) Then ' skip the first point
+				arrPrevPnt = arrPnt
+			Else
+				strLine = Rhino.AddLine(arrPrevPnt, arrPnt)
+				arrMidPnt = Rhino.CurveMidPoint(strLine)
+				strMidPnt = Rhino.AddPoint(arrMidPnt)
+				Rhino.ObjectLayer strMidPnt, toLayer
+				arrPrevPnt = arrPnt
+			End If
+		End If
+		i = i + 1
+	Next
+End Sub
+
+Sub ProjectToXAxisLayer(fromLayer, axisLayer)
+	Dim arrObjects, strObj, arrPnt
+	arrObjects = Rhino.ObjectsByLayer(fromLayer)
+
+	Rhino.Command "_Top"
+	Rhino.CurrentLayer axisLayer
+	Rhino.SelectObjects(Rhino.ObjectsByLayer(fromLayer))
+	Rhino.Command("_ProjectToCPlane _Enter")	
+
+	arrObjects = Rhino.ObjectsByLayer(fromLayer)
+	For Each strObj In arrObjects 
+		If(Rhino.IsPoint(strObj)) Then
+			arrPnt = Rhino.PointCoordinates(strObj)
+			arrPnt(0) = 0 ' zero the x-component
+			If(Rhino.IsVectorTiny(arrPnt)) Then
+				Rhino.ObjectLayer strObj, axisLayer
+			End If
+		End If	
+	Next
+End Sub
+
+Sub NewLayer(name, r, g, b) 
+	If(Rhino.IsLayer(name)) Then 
+		Rhino.PurgeLayer name
+	End If
+	Rhino.AddLayer name, RGB(r,g,b)
+End Sub
+
+Sub Purge(layerName)
+	If(Rhino.IsLayer(layerName)) Then
+		Rhino.PurgeLayer layerName
+	End If
+End Sub
+
+Function GrabByLayer(name) 
+	Dim arrObjects
+	arrObjects = Rhino.ObjectsByLayer(name)
+	GrabByLayer = arrObjects(0)
+End Function

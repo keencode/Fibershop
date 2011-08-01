@@ -1,0 +1,98 @@
+﻿Option Explicit
+
+Call Main()
+
+Sub Main()
+	Dim strMan
+	Dim arrObjects, strChild, strObj
+	Dim strPly, strPlyLayer, strLine
+	Dim intPly: intPly = 0
+	Dim cmd, dblWidth
+	Dim strLine0, strLine1, arrIntersections
+	Dim strAngle
+	
+	' Search for the Mandrel Surface (ignoring anything else on this layer)
+	strMan = ""
+	arrObjects = Rhino.ObjectsByLayer("Mandrel")
+	'strMan = Rhino.GetObject("Select the mandrel surface.", 8, , True)
+	' strMan = arrObjects(0)
+	For Each strObj In arrObjects
+		If(Rhino.IsSurface(strObj)) Then
+			strMan = strObj
+			Exit For
+		End If
+		If(Rhino.IsPolysurface(strObj)) Then
+			strMan = strObj
+			Exit For
+		end if
+	Next
+	' Check that Mandrel exists
+	
+	Rhino.CurrentLayer "Mandrel"
+
+	' Manage Layers
+	If(Rhino.IsLayer("Intersections")) Then 
+		Rhino.PurgeLayer "Intersections"
+	End If
+	Rhino.AddLayer "Intersections", RGB(255,0,0)
+	
+	If(Rhino.IsLayer("Top")) Then 
+		Rhino.PurgeLayer "Top"
+	End If
+	Rhino.AddLayer "Top", RGB(255,0,0),,,"Intersections"
+	
+	If(Rhino.IsLayer("Bottom")) Then 
+		Rhino.PurgeLayer "Bottom"
+	End If
+	Rhino.AddLayer "Bottom", RGB(255,0,0),,,"Intersections"
+	
+	' Get the Angle0 Layer
+	arrObjects = Rhino.ObjectsByLayer("Angle0")
+	strAngle = arrObjects(0)
+	
+	' Get the lines		
+	arrObjects = Rhino.ObjectsByLayer("Line0")
+	strLine0 = arrObjects(0)
+	arrObjects = Rhino.ObjectsByLayer("Line1")
+	strLine1 = arrObjects(0)
+
+	' Calculate Intersections	
+	Rhino.CurrentLayer "Intersections"	
+	Rhino.SelectObjects(Array(strLine0, strLine1))
+	Rhino.Command("_Intersect")
+
+	' Split the Two Intersection Curves (Top +z and Bottom -z)
+	Dim strPnt, arrPnt, arrPnts
+	arrPnts = Rhino.ObjectsByLayer("Intersections")
+	For Each strPnt In arrPnts
+		arrPnt = Rhino.PointCoordinates(strPnt)
+		If(arrPnt(2) > 0) Then
+			Rhino.ObjectLayer strPnt, "Top"
+		Else
+			Rhino.ObjectLayer strPnt, "Bottom"			
+		End If
+	Next
+	
+	' Step through the Intersection-Top Points and plot a corrected Angle Point
+	'	Dim dblCorrection
+	'	Dim strMarker, arrAnglePnt, strNewAnglePnt
+	'	arrPnts = Rhino.ObjectsByLayer("Top")
+	'	For Each strPnt In arrPnts
+	'		arrPnt = Rhino.PointCoordinates(strPnt)		
+	'		' Error is the y-direction: linearly scaled to correct the angle
+	'		dblCorrection = (0.01) * (arrPnt(1) / 2.54)
+	'		Rhino.Print("Correction: " + CStr(dblCorrection))
+
+	'		' Get the current Angle at that particular X value
+	'		strMarker = Rhino.AddLine(Array(arrPnt(0),0,-180), Array(arrPnt(0),0,180)) 'Create line to evaluate Z-value (i.e. degree)
+	'		arrResults = Rhino.CurveCurveIntersection(strAngle, strMarker)
+	'		arrAnglePnt = arrResults(0,1) ' Grab the intersecting point
+	'		Rhino.DeleteObject(strMarker)	'Clear the Marker line
+		
+	'		strNewAnglePnt = Rhino.AddPoint(Array(arrPnt(0), 0, arrAnglePnt - dblCorrection))
+	'	Rhino.ObjectLayer strNewAnglePnt, "Angle0"
+	'	Next	
+	
+	Rhino.Command "_Top"
+	'End of Main method
+End Sub

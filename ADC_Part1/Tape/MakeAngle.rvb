@@ -1,0 +1,100 @@
+﻿Option Explicit
+
+Call Main()
+
+Sub Main()
+	Dim intPly: intPly = 0
+	Dim arrStartPlane
+	Dim dblL, dblC, dblAlpha, dblDeg
+	Dim strPly, strPlyLayer, strStart, strEnd, arrStart, arrEnd, strAngle
+	Dim strMan
+	Dim arrObjects, strChild, strObj
+	Dim arrNormal
+	
+	' Search for the Mandrel Surface (ignoring anything else on this layer)
+	strMan = ""
+	arrObjects = Rhino.ObjectsByLayer("Mandrel")
+	'strMan = Rhino.GetObject("Select the mandrel surface.", 8, , True)
+	' strMan = arrObjects(0)
+	For Each strObj In arrObjects
+		If(Rhino.IsSurface(strObj)) Then
+			strMan = strObj
+			Exit For
+		End If
+		If(Rhino.IsPolysurface(strObj)) Then
+			strMan = strObj
+			Exit For
+		end if
+	Next
+	' Check that Mandrel exists
+	
+	Rhino.CurrentLayer "Mandrel"
+	
+	' Loop through the Strips 
+	Do
+		' Which layer to generate points?
+		strPly = Rhino.GetString("Generate Angles for Ply: ")
+		If(strPly = "") Then Exit Do
+		intPly = CInt(strPly)
+		
+		strPlyLayer = "Ply" + CStr(intPly)
+		If(Rhino.IsLayer(strPlyLayer)) Then
+			Rhino.Print("Processing " + strPlyLayer)	
+				
+			' Angle Layer
+			arrObjects = Rhino.ObjectsByLayer("Angle" + CStr(intPly))
+			strAngle = arrObjects(0)			
+
+			'	strStart = Rhino.GetObject("Select base curve", 4)
+			arrObjects = Rhino.ObjectsByLayer("Start" + CStr(intPly))
+			strStart = arrObjects(0)	
+			arrStart = Rhino.CurveStartPoint(strStart)
+			arrNormal = Rhino.CurveNormal (strStart)  
+
+			'	strEnd = Rhino.GetObject("Select middle section curve", 4)
+			arrObjects = Rhino.ObjectsByLayer("End" + CStr(intPly))
+			strEnd = arrObjects(0)
+			arrEnd = Rhino.CurveEndPoint(strEnd)			
+
+						
+			If Not Rhino.IsCurvePlanar(strStart) Then
+				Rhino.Print "Curve on layer Start" + CStr(intPly) + " must be planar! Script cancelled."
+				Exit Sub
+			End If
+
+			If Not Rhino.IsCurvePlanar(strEnd) Then
+				Rhino.Print "Curve on layer End" + CStr(intPly) + " must be planar! Script cancelled."
+				Exit Sub
+			End If
+			
+			' Calculate Distance btw Start and End
+			arrStartPlane = Rhino.PlaneFromNormal (arrStart, arrNormal)
+			dblL = Abs(Rhino.DistanceToPlane (arrStartPlane, arrEnd))
+			
+			' Calculate Circumference of the Start
+			dblC = Rhino.CurveLength(strStart)
+			
+			' Calculate up to 10 wraps
+			Dim intWraps, intWrapsCount
+			Dim intDiv
+			intWraps = 10
+			intDiv = 1
+			
+			For intWrapsCount = 1 To intWraps
+				' Calculate Inverse ArcTan
+				dblAlpha = Rhino.ATan2(dblC, dblL/intDiv)
+				dblDeg = Rhino.ToDegrees (dblAlpha)
+
+				Rhino.CurrentLayer "Angle" + CStr(intPly)
+				Rhino.AddLine Array(0.0,0.0,dblDeg), Array(120.0,0.0,dblDeg)
+				
+				intDiv = intDiv * 2 ' double the Div
+			Next
+			
+		End If
+	Loop
+	'End of Main method
+End Sub
+  
+
+    

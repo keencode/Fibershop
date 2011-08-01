@@ -1,0 +1,243 @@
+﻿Option Explicit
+'Script written by <insert name>
+'Script copyrighted by <insert company name>
+'Script version Tuesday, November 03, 2009 4:43:33 PM
+
+Call Main()
+Sub Main()
+	Dim arrObjects, arrPoints
+	Dim strMan, strNum
+	Dim strPlyLayer
+
+	Dim arrRailAngles()
+	Dim intRailAngles: intRailAngles = 0
+
+	Dim arrLift()
+	Dim intLift: intLift = 0
+	
+	Rhino.LayerVisible "Mandrel", True
+	strMan = GrabByLayer("Mandrel")
+	
+	
+	NewLayer "Rails",0,250,150 
+	NewLayer "Rejects",255,0,0  
+	NewLayer "Circumference",200,200,200 
+		
+	Dim dblEdgeAngle: dblEdgeAngle =  71.3255
+	' Dim dblEdgeWidth: dblEdgeWidth = 1.75
+	Dim dblEdgeWidth: dblEdgeWidth = 2.5
+	Dim dblFlatEdgeLead: dblFlatEdgeLead = 1.4 ' normally 2
+	Dim dblTopWidth: dblTopWidth = 10.0
+	Dim dblBotWidth: dblBotWidth = 15.0	
+	
+	' Rails -
+	' top corner - right half
+	AddRange arrRailAngles, intRailAngles, 0, dblTopWidth, 3 									
+	' right top side
+	AddRange arrRailAngles, intRailAngles, dblTopWidth, dblEdgeAngle - (dblFlatEdgeLead*dblEdgeWidth), 9   	
+	' right corner - top half - trouble with 12
+	AddRange arrRailAngles, intRailAngles, dblEdgeAngle - (dblFlatEdgeLead*dblEdgeWidth), dblEdgeAngle, 13   
+	' right corner - bottom half
+	AddRange arrRailAngles, intRailAngles, dblEdgeAngle, dblEdgeAngle + dblEdgeWidth, 12 	
+	' bottom right side
+	AddRange arrRailAngles, intRailAngles, dblEdgeAngle + dblEdgeWidth, 180 - dblBotWidth, 3  
+	' bottom right corner
+	AddRange arrRailAngles, intRailAngles, 180 - dblBotWidth, 180, 3   		
+	' bottom left corner
+	AddRange arrRailAngles, intRailAngles, 180.0, 180 + dblBotWidth, 3  
+	' bottom left side
+	AddRange arrRailAngles, intRailAngles, 180 + dblBotWidth, (360 - dblEdgeAngle) - dblEdgeWidth, 3 	 
+	' ### left bottom corner
+	' AddRange arrRailAngles, intRailAngles, (360 - dblEdgeAngle) - dblEdgeWidth, (360 - dblEdgeAngle), 12  
+	AddRange arrRailAngles, intRailAngles, (360 - dblEdgeAngle) - dblEdgeWidth, (360 - dblEdgeAngle), 25  
+	' ###  left top corner
+	' AddRange arrRailAngles, intRailAngles, (360 - dblEdgeAngle), (360 - dblEdgeAngle) + (dblFlatEdgeLead*dblEdgeWidth), 12
+	AddRange arrRailAngles, intRailAngles, (360 - dblEdgeAngle), (360 - dblEdgeAngle) + (dblFlatEdgeLead*dblEdgeWidth), 25  
+	' left top side
+	AddRange arrRailAngles, intRailAngles, (360 - dblEdgeAngle) + (dblFlatEdgeLead*dblEdgeWidth), 360.0 - dblTopWidth, 9   
+	' top corner - left half
+	AddRange arrRailAngles, intRailAngles, 360.0 - dblTopWidth, 360.0, 3  
+		
+	Call AngularRails(strMan, arrRailAngles, 10.0, arrLift)
+	
+	Dim arrRail, strRail, strName
+	
+	Rhino.CurrentLayer "Rails"
+	arrRail = Rhino.ObjectsByLayer("Rails")
+	For Each strRail In arrRail
+		strName = Rhino.ObjectName(strRail)
+		If(InStr(strName, "Angle") > 0) Then
+			Rhino.Print strName + " " + Rhino.Pt2Str(Rhino.CurveStartPoint(strRail))
+		Else			
+			Rhino.Print "Deleting: " + Rhino.Pt2Str(Rhino.CurveStartPoint(strRail))
+			Rhino.DeleteObject strRail
+		End If
+	Next
+End Sub
+
+Sub AddRangeAndCopy(ByRef arrContainer, ByRef intSize, dblFrom, dblTo, intDivisions, ByRef arrCopyTo, ByRef intCopySize, dblVal) 
+	Dim dblDelta, dblProgress
+	Dim intCount
+	dblDelta = (dblTo - dblFrom) / intDivisions
+	dblProgress = dblFrom
+	' Packs the range
+	For intCount = 0 To (intDivisions-1)
+		intSize = intSize + 1
+		ReDim Preserve arrContainer(intSize)
+		arrContainer(intSize-1) = dblProgress
+		'Rhino.Print "arrContainer(" & CStr(intSize) & ") = " & dblProgress
+		dblProgress = dblProgress + dblDelta
+	Next
+	
+	' Packs the copyTo array with dblVal
+	For intCount = 0 To (intDivisions-1)
+		intCopySize = intCopySize + 1
+		ReDim Preserve arrCopyTo(intCopySize)
+		arrCopyTo(intCopySize-1) = dblVal
+	Next
+End Sub
+
+Sub AddRange(ByRef arrContainer, ByRef intSize, dblFrom, dblTo, intDivisions) 
+	Dim dblDelta, dblProgress
+	Dim intCount
+	dblDelta = (dblTo - dblFrom) / intDivisions
+	dblProgress = dblFrom
+	' Packs the range
+	For intCount = 0 To (intDivisions-1)
+		intSize = intSize + 1
+		ReDim Preserve arrContainer(intSize)
+		arrContainer(intSize-1) = dblProgress
+		'Rhino.Print "arrContainer(" & CStr(intSize) & ") = " & dblProgress
+		dblProgress = dblProgress + dblDelta
+	Next
+End Sub
+
+
+Function CreateSectionAtYZ(strMan, dblY, dblZ)
+	' Declare local variables
+	Dim saved, cmd, i
+	Dim arrObjects, strCurve
+	Dim strJoin
+
+	CreateSectionAtYZ = Null 	' Set default return value  
+	Rhino.EnableRedraw False 	' For speed, turn of screen redrawing
+
+	saved = Rhino.SelectedObjects 	' Save any selected objects
+	Rhino.UnSelectAllObjects 	' Unselect all objects
+
+	Rhino.CurrentLayer "Temp"
+	
+	' Select the objects to create the cut plane through
+	' Rhino.Command("_Right") ' set the Perspective to the Front View (to make X Sections)
+	Rhino.Command "_Section JoinCurves=ByPolySurface _Enter", 0 ' Set the JoinCurves to create Joined Sections
+	Rhino.SelectObject strMan ' Select the Mandrel
+	cmd = "_Section 0,0 " & CStr(dblY) & "," & CStr(dblZ) & " _Enter"
+	Rhino.Command cmd, 0
+
+	arrObjects = Rhino.ObjectsByLayer("Temp") 'get the Mandrel Surface
+	If(IsArray(arrObjects)) Then
+		' Sort the Results
+		If (UBound(arrObjects) > 1) Then
+			For i = 0 To Ubound(arrObjects)
+				Rhino.ObjectLayer arrObjects(i), "Rejects"
+			Next
+			' Do not try to save the Reject Rails
+			' strJoin = Rhino.JoinCurves(arrObjects, True)
+			' Rhino.ObjectLayer strJoin, "Rails"
+		Else 
+			Rhino.ObjectLayer arrObjects(0), "Rails"
+		End If
+	Else
+		Exit Function
+	End If
+		
+	' Get the object created by Section and return it
+	CreateSectionAtYZ = Rhino.FirstObject
+	
+	Rhino.UnSelectAllObjects 	' Unselect all objects	
+	If IsArray(saved) Then Rhino.SelectObjects(saved) ' If any objects were selected before calling this function, re-select them
+
+	Rhino.EnableRedraw True 	' Don't forget to turn redrawing back on
+End Function
+
+Function RadialRails(strMan, lngDensity, dblRadius)
+	Dim arrPlane, strCircle, arrPoint, arrPoints
+	RadialRails = Null 	' Set default return value  
+
+	' Create a Circle with a Given Radius
+	Rhino.CurrentLayer "Circumference"
+	arrPlane = Rhino.WorldYZPlane
+	strCircle = Rhino.AddCircle(arrPlane, dblRadius)
+	arrPoints = DivideCurve(strCircle, lngDensity)
+		
+	Rhino.AddLayer("Temp")
+	Rhino.Command("_Right") 
+	
+	For Each arrPoint In arrPoints
+		Rhino.CurrentLayer "Circumference"
+		Rhino.AddPoint arrPoint
+		Call CreateSectionAtYZ(intPly, strMan, arrPoint(1), arrPoint(2))
+	Next
+	
+	Rhino.Command("_Top")
+	Rhino.Command("_Perspective")
+	
+	Rhino.PurgeLayer "Temp"
+	
+	' Get the object created by Section and return it
+	RadialRails = arrPoints
+End Function
+
+Function AngularRails(strMan, arrRailAngles, dblRadius, arrLift)
+	Dim arrPlane, strCircle, arrPoint, arrPoints
+	Dim dblRailAngle
+	Dim strRail
+	Dim i
+	
+	AngularRails = Null 	' Set default return value  
+
+	' Create a Circle with a Given Radius
+	Rhino.CurrentLayer "Circumference"
+	arrPlane = Rhino.WorldYZPlane
+	strCircle = Rhino.AddCircle(arrPlane, dblRadius)
+		
+	Rhino.AddLayer("Temp")
+	Rhino.Command("_Right") 
+	
+	' For Each dblRailAngle In arrRailAngles
+	For i = 0 To UBound(arrRailAngles)
+		dblRailAngle = 	arrRailAngles(i) ' step through with Counter
+		
+		Rhino.CurrentLayer "Circumference"
+		If(Not IsEmpty(dblRailAngle)) Then
+			' Get new Point, by rotating a Vector of size Radius by arrRailAngle about the X-axis
+			arrPoint = Rhino.VectorRotate(Array(0,0,dblRadius), -dblRailAngle, Array(1,0,0))
+			Rhino.AddPoint arrPoint
+			strRail = CreateSectionAtYZ(strMan, arrPoint(1), arrPoint(2))
+			
+			' Got the Rail - name and set the 'Lift'
+			Rhino.ObjectName strRail, "Angle " + CStr(dblRailAngle)
+		End If
+	Next
+	
+	Rhino.Command("_Top")
+	Rhino.Command("_Perspective")
+	
+	Rhino.PurgeLayer "Temp"
+	
+	' Get the object created by Section and return it
+	AngularRails = arrPoints	
+End Function
+
+Sub NewLayer(name, r, g, b) 
+	If(Rhino.IsLayer(name)) Then 
+		Rhino.PurgeLayer name
+	End If
+	Rhino.AddLayer name, RGB(r,g,b)
+End Sub
+
+Function GrabByLayer(name) 
+	Dim arrObjects
+	arrObjects = Rhino.ObjectsByLayer(name)
+	GrabByLayer = arrObjects(0)
+End Function
