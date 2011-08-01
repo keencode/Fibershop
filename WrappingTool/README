@@ -1,0 +1,10 @@
+RhinoScript Wrapping Tool Final (Summer 2009) 
+
+written by Niko 
+
+.
+|-- 091024TestPiece.3dm - Example Surface to use in Wrapping Tool Demo
+|-- Manual.doc - Written instructions by Niko
+`-- WrappingToolScriptFinal.rvb - RhinoScript by Niko
+
+

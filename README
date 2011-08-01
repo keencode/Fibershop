@@ -1,2 +1,7 @@
-Fibershop 2006-2010
+Fibershop and Composite Parts (2006-2010)
+.
+|-- ADC_Part1 - Fall 2009 ADC Graphite Surface (RhinoScript)
+|-- ADC_Part2 - April 2010 Final Triangle Surface (Java + Processing libs)
+|-- FS_004 - latest version of the Processing Version of Fibershop (Tuned for the RVA Triangle Mandrel)
+`-- WrappingTool - RhinoScript Wrapping Tool
 
